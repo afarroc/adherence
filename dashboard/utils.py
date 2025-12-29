@@ -2,7 +2,8 @@ from datetime import datetime, date, time, timedelta
 from django.utils import timezone
 from django.db.models import Sum, Avg, Count, Q
 from django.db import transaction
-import pandas as pd
+from collections import defaultdict
+import pandas as pd  # Import for data analysis
 import numpy as np
 from .models import *
 
@@ -88,64 +89,412 @@ class CalculadorAdherencia:
     # dashboard/utils.py - MÉTODO CORREGIDO
     
     @staticmethod
-    def calcular_adherencia_por_hora(fecha):
+    def calcular_adherencia_por_hora_minuto_a_minuto(fecha):
         """
-        Calcula adherencia por hora del día - VERSIÓN OPTIMIZADA
+        Calcula adherencia por hora con cálculo MINUTO A MINUTO - VERSIÓN CORRECTA
+
+        Para cada minuto dentro de la hora:
+        1. Identifica qué agentes están programados en ESE minuto exacto
+        2. Identifica qué agentes programados están activos en ESE minuto exacto
+        3. Calcula: (agentes activos / agentes programados) para ESE minuto
+        4. Promedia todos los minutos de la hora
+
+        Esto evita la compensación global y detecta huecos reales.
         """
         horas = []
-        
-        # Pre-cargar todos los programas del día para mejor performance
-        programas_dia = ProgramaDiario.objects.filter(fecha=fecha)
-        
-        for hora in range(8, 20):
-            hora_inicio = time(hora, 0)
-            hora_fin = time(hora + 1, 0)
-            
-            # 1. Filtrar programas que se solapen con esta hora
-            programas_hora = [
-                p for p in programas_dia 
-                if p.hora_inicio < hora_fin and p.hora_fin > hora_inicio
-            ]
-            
-            agentes_programados = len(programas_hora)
-            
-            if agentes_programados > 0:
-                # 2. Obtener IDs de agentes programados
-                agentes_ids = [p.agente_id for p in programas_hora]
-                
-                # 3. Buscar actividades productivas en esa hora
-                actividades = RegistroActividad.objects.filter(
+
+        for hora in range(8, 20):  # De 8 AM a 8 PM
+            # Lista para almacenar adherencia de cada minuto
+            adherencias_por_minuto = []
+            agentes_programados_por_minuto = []
+
+            # Analizar cada minuto de la hora
+            for minuto in range(60):
+                # Crear el intervalo exacto de este minuto
+                inicio_minuto = time(hora, minuto)
+                fin_minuto = time(hora, minuto + 1) if minuto < 59 else time(hora + 1, 0)
+
+                # 1. Agentes programados en ESTE minuto exacto
+                programas_en_minuto = ProgramaDiario.objects.filter(
+                    fecha=fecha,
+                    hora_inicio__lt=fin_minuto,
+                    hora_fin__gt=inicio_minuto
+                )
+
+                agentes_programados = programas_en_minuto.count()
+
+                if agentes_programados == 0:
+                    # Si no hay agentes programados, adherencia = 0% (o N/A)
+                    adherencias_por_minuto.append(0)
+                    agentes_programados_por_minuto.append(0)
+                    continue
+
+                # 2. Agentes ACTIVOS en ESTE minuto exacto
+                agentes_ids = programas_en_minuto.values_list('agente_id', flat=True)
+
+                agentes_activos = RegistroActividad.objects.filter(
                     fecha=fecha,
                     agente_id__in=agentes_ids,
-                    hora_inicio__time__lt=hora_fin,
-                    hora_fin__time__gt=hora_inicio,
+                    hora_inicio__time__lt=fin_minuto,
+                    hora_fin__time__gt=inicio_minuto,
                     tipo_actividad__in=['LLAMADA', 'DISPO', 'CAPAC', 'ADMIN']
-                )
-                
-                # Contar agentes DISTINTOS con actividades
-                agentes_activos = actividades.values('agente_id').distinct().count()
-                
-                # 4. Calcular adherencia
-                adherencia = (agentes_activos / agentes_programados) * 100
-                
-                horas.append({
-                    'hora': f"{hora:02d}:00",
-                    'adherencia': round(adherencia, 2),
-                    'agentes_programados': agentes_programados,
-                    'agentes_activos': agentes_activos,
-                    'porcentaje_activos': f"{round((agentes_activos/agentes_programados)*100, 1)}%"
-                })
+                ).values('agente_id').distinct().count()
+
+                # 3. Calcular adherencia para ESTE minuto exacto
+                adherencia_minuto = (agentes_activos / agentes_programados) * 100
+                adherencias_por_minuto.append(adherencia_minuto)
+                agentes_programados_por_minuto.append(agentes_programados)
+
+            # 4. Calcular promedios para la hora completa
+            if adherencias_por_minuto:
+                # Promedio ponderado por agentes programados en cada minuto
+                total_minutos = len(adherencias_por_minuto)
+                minutos_con_programacion = sum(1 for apm in agentes_programados_por_minuto if apm > 0)
+
+                if minutos_con_programacion > 0:
+                    # Solo considerar minutos donde HAY programación
+                    adherencia_promedio = sum(
+                        adherencias_por_minuto[i]
+                        for i in range(total_minutos)
+                        if agentes_programados_por_minuto[i] > 0
+                    ) / minutos_con_programacion
+
+                    # Agentes programados promedio en la hora
+                    agentes_programados_promedio = sum(agentes_programados_por_minuto) / total_minutos
+
+                    # Minutos con adherencia < 80% (problemas)
+                    minutos_baja_adherencia = sum(1 for a in adherencias_por_minuto if a < 80)
+
+                    horas.append({
+                        'hora': f"{hora:02d}:00",
+                        'adherencia': round(adherencia_promedio, 2),
+                        'agentes_programados_promedio': round(agentes_programados_promedio, 1),
+                        'minutos_con_programacion': minutos_con_programacion,
+                        'minutos_baja_adherencia': minutos_baja_adherencia,
+                        'consistencia': round((1 - (minutos_baja_adherencia / minutos_con_programacion)) * 100, 1) if minutos_con_programacion > 0 else 0
+                    })
+                else:
+                    # No hay programación en toda la hora
+                    horas.append({
+                        'hora': f"{hora:02d}:00",
+                        'adherencia': 0,
+                        'agentes_programados_promedio': 0,
+                        'minutos_con_programacion': 0,
+                        'minutos_baja_adherencia': 0,
+                        'consistencia': 0
+                    })
             else:
                 horas.append({
                     'hora': f"{hora:02d}:00",
                     'adherencia': 0,
-                    'agentes_programados': 0,
-                    'agentes_activos': 0,
-                    'porcentaje_activos': "0%"
+                    'agentes_programados_promedio': 0,
+                    'minutos_con_programacion': 0,
+                    'minutos_baja_adherencia': 0,
+                    'consistencia': 0
                 })
-        
+
         return horas
-    
+
+    @staticmethod
+    def calcular_adherencia_por_hora(fecha):
+        """
+        Calcula adherencia por hora con cálculo MINUTO A MINUTO - VERSIÓN OPTIMIZADA
+        Usa pre-carga de datos y diccionarios para mejor performance
+        """
+        from collections import defaultdict
+        import numpy as np
+
+        horas = []
+
+        # 1. Pre-cargar TODOS los datos del día una sola vez
+        programas_dia = list(ProgramaDiario.objects.filter(fecha=fecha))
+        actividades_dia = list(RegistroActividad.objects.filter(
+            fecha=fecha,
+            tipo_actividad__in=['LLAMADA', 'DISPO', 'CAPAC', 'ADMIN']
+        ))
+
+        # 2. Crear estructuras de acceso rápido
+        # Diccionario: hora -> minuto -> lista de agentes programados
+        programacion_por_minuto = defaultdict(lambda: defaultdict(set))
+
+        for programa in programas_dia:
+            # Para cada minuto que cubre este programa, agregar al agente
+            hora_inicio_prog = programa.hora_inicio.hour
+            minuto_inicio_prog = programa.hora_inicio.minute
+            hora_fin_prog = programa.hora_fin.hour
+            minuto_fin_prog = programa.hora_fin.minute
+
+            # Convertir a minutos absolutos desde las 00:00
+            inicio_abs = hora_inicio_prog * 60 + minuto_inicio_prog
+            fin_abs = hora_fin_prog * 60 + minuto_fin_prog
+
+            # Solo considerar horario laboral (8:00-20:00)
+            inicio_abs = max(inicio_abs, 8 * 60)  # 8:00 AM
+            fin_abs = min(fin_abs, 20 * 60)       # 8:00 PM
+
+            for minuto_abs in range(inicio_abs, fin_abs):
+                if 8*60 <= minuto_abs < 20*60:  # Solo horario laboral
+                    hora = minuto_abs // 60
+                    minuto = minuto_abs % 60
+                    programacion_por_minuto[hora][minuto].add(programa.agente_id)
+
+        # 3. Diccionario: hora -> minuto -> lista de agentes activos
+        actividad_por_minuto = defaultdict(lambda: defaultdict(set))
+
+        for actividad in actividades_dia:
+            hora_inicio_act = actividad.hora_inicio.hour
+            minuto_inicio_act = actividad.hora_inicio.minute
+            hora_fin_act = actividad.hora_fin.hour
+            minuto_fin_act = actividad.hora_fin.minute
+
+            # Convertir a minutos absolutos
+            inicio_abs = hora_inicio_act * 60 + minuto_inicio_act
+            fin_abs = hora_fin_act * 60 + minuto_fin_act
+
+            # Solo considerar horario laboral
+            inicio_abs = max(inicio_abs, 8 * 60)
+            fin_abs = min(fin_abs, 20 * 60)
+
+            for minuto_abs in range(inicio_abs, fin_abs):
+                if 8*60 <= minuto_abs < 20*60:
+                    hora = minuto_abs // 60
+                    minuto = minuto_abs % 60
+                    actividad_por_minuto[hora][minuto].add(actividad.agente_id)
+
+        # 4. Calcular para cada hora
+        for hora in range(8, 20):
+            adherencias_minutos = []
+            agentes_prog_por_minuto = []
+            agentes_activos_por_minuto = []
+
+            for minuto in range(60):
+                # Agentes programados en este minuto
+                agentes_prog = programacion_por_minuto[hora].get(minuto, set())
+                num_agentes_prog = len(agentes_prog)
+
+                if num_agentes_prog == 0:
+                    adherencias_minutos.append(0)
+                    agentes_prog_por_minuto.append(0)
+                    agentes_activos_por_minuto.append(0)
+                    continue
+
+                # Agentes activos en este minuto
+                agentes_activos = actividad_por_minuto[hora].get(minuto, set())
+                num_agentes_activos = len(agentes_activos.intersection(agentes_prog))
+
+                # Adherencia para este minuto
+                adherencia = (num_agentes_activos / num_agentes_prog) * 100
+                adherencias_minutos.append(adherencia)
+                agentes_prog_por_minuto.append(num_agentes_prog)
+                agentes_activos_por_minuto.append(num_agentes_activos)
+
+            # Calcular estadísticas para la hora
+            if adherencias_minutos:
+                # Solo considerar minutos con programación
+                minutos_con_programacion = [i for i, apm in enumerate(agentes_prog_por_minuto) if apm > 0]
+
+                if minutos_con_programacion:
+                    adherencia_promedio = np.mean([adherencias_minutos[i] for i in minutos_con_programacion])
+                    agentes_promedio = np.mean([agentes_prog_por_minuto[i] for i in minutos_con_programacion])
+                    agentes_activos_promedio = np.mean([agentes_activos_por_minuto[i] for i in minutos_con_programacion])
+
+                    # Detectar problemas
+                    minutos_baja = sum(1 for i in minutos_con_programacion if adherencias_minutos[i] < 80)
+                    minutos_criticos = sum(1 for i in minutos_con_programacion if adherencias_minutos[i] < 50)
+
+                    # Calcular consistencia
+                    consistencia = (len(minutos_con_programacion) - minutos_baja) / len(minutos_con_programacion) * 100
+
+                    horas.append({
+                        'hora': f"{hora:02d}:00",
+                        'adherencia': round(adherencia_promedio, 2),
+                        'agentes_programados': round(agentes_promedio, 1),
+                        'agentes_activos': round(agentes_activos_promedio, 1),
+                        'minutos_programados': len(minutos_con_programacion),
+                        'minutos_baja_adherencia': minutos_baja,
+                        'minutos_criticos': minutos_criticos,
+                        'consistencia': round(consistencia, 1),
+                        'estado': '✅ Excelente' if adherencia_promedio >= 90 else
+                                 '⚠️  Aceptable' if adherencia_promedio >= 80 else
+                                 '🔴 Crítico' if adherencia_promedio >= 60 else
+                                 '💀 Grave'
+                    })
+                else:
+                    # No hay programación en la hora
+                    horas.append({
+                        'hora': f"{hora:02d}:00",
+                        'adherencia': 0,
+                        'agentes_programados': 0,
+                        'agentes_activos': 0,
+                        'minutos_programados': 0,
+                        'minutos_baja_adherencia': 0,
+                        'minutos_criticos': 0,
+                        'consistencia': 0,
+                        'estado': '⏸️  Sin programación'
+                    })
+
+        return horas
+
+    @staticmethod
+    def analizar_problemas_adherencia_por_minuto(fecha):
+            """
+            Detecta problemas específicos minuto a minuto
+            Devuelve huecos de productividad y sobrecargas
+            """
+            from collections import defaultdict
+
+            # 1. Obtener datos minuto a minuto
+            resultado = CalculadorAdherencia.calcular_adherencia_por_hora(fecha)
+
+            # 2. Analizar problemas
+            problemas = {
+                'huecos_productividad': [],  # Minutos con adherencia < 50%
+                'sobrecargas': [],           # Minutos con adherencia > 110% (imposible)
+                'horas_criticas': [],        # Horas con >30% de minutos problemáticos
+                'resumen_por_hora': defaultdict(dict)
+            }
+
+            for hora_data in resultado:
+                hora = hora_data['hora']
+
+                # 3. Detectar horas críticas
+                if hora_data['minutos_criticos'] > 0:
+                    problemas['horas_criticas'].append({
+                        'hora': hora,
+                        'minutos_criticos': hora_data['minutos_criticos'],
+                        'adherencia_promedio': hora_data['adherencia']
+                    })
+
+                problemas['resumen_por_hora'][hora] = {
+                    'adherencia': hora_data['adherencia'],
+                    'estado': hora_data.get('estado', 'Sin estado'),
+                    'minutos_baja': hora_data.get('minutos_baja_adherencia', 0),
+                    'consistencia': hora_data.get('consistencia', 0)
+                }
+
+            # 4. Obtener datos detallados minuto a minuto para análisis
+            print(f"\n🔍 ANÁLISIS DETALLADO DE ADHERENCIA - {fecha}")
+            print("="*60)
+
+            for hora in range(8, 20):
+                print(f"\n🕐 HORA {hora:02d}:00")
+                print("-"*40)
+
+                # Obtener distribución de adherencia por minuto para esta hora
+                distribucion = CalculadorAdherencia.obtener_distribucion_adherencia_por_minuto(fecha, hora)
+
+                if distribucion:
+                    # Mostrar histograma simple
+                    print("Distribución de adherencia por minuto:")
+                    for rango in ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']:
+                        count = distribucion['histograma'].get(rango, 0)
+                        bar = '█' * (count // 2)  # Cada █ = 2 minutos
+                        print(f"  {rango}: {bar} ({count} minutos)")
+
+                    # Mostrar peores minutos
+                    if distribucion['minutos_bajos']:
+                        print(f"\n⚠️  Minutos más críticos:")
+                        for minuto in distribucion['minutos_bajos'][:5]:  # Top 5 peores
+                            print(f"  {hora:02d}:{minuto['minuto']:02d} - {minuto['adherencia']:.1f}% "
+                                f"({minuto['agentes_activos']}/{minuto['agentes_programados']} agentes)")
+
+            return problemas
+
+    @staticmethod
+    def obtener_distribucion_adherencia_por_minuto(fecha, hora):
+        """
+        Obtiene la distribución detallada de adherencia para una hora específica
+        """
+        # 1. Obtener programación para esta hora
+        hora_inicio = time(hora, 0)
+        hora_fin = time(hora + 1, 0)
+
+        programas_hora = ProgramaDiario.objects.filter(
+            fecha=fecha,
+            hora_inicio__lt=hora_fin,
+            hora_fin__gt=hora_inicio
+        )
+
+        if not programas_hora.exists():
+            return None
+
+        # 2. Para cada minuto, calcular adherencia
+        distribucion = {
+            'hora': f"{hora:02d}:00",
+            'minutos_analizados': 60,
+            'histograma': defaultdict(int),
+            'minutos_bajos': [],
+            'adherencia_promedio': 0,
+            'consistencia': 0
+        }
+
+        adherencias_minuto = []
+
+        for minuto in range(60):
+            inicio_minuto = time(hora, minuto)
+            fin_minuto = time(hora, minuto + 1) if minuto < 59 else time(hora + 1, 0)
+
+            # Agentes programados
+            agentes_prog = programas_hora.filter(
+                hora_inicio__lt=fin_minuto,
+                hora_fin__gt=inicio_minuto
+            ).count()
+
+            if agentes_prog == 0:
+                continue
+
+            # Agentes activos
+            agentes_ids = programas_hora.filter(
+                hora_inicio__lt=fin_minuto,
+                hora_fin__gt=inicio_minuto
+            ).values_list('agente_id', flat=True)
+
+            agentes_activos = RegistroActividad.objects.filter(
+                fecha=fecha,
+                agente_id__in=agentes_ids,
+                hora_inicio__time__lt=fin_minuto,
+                hora_fin__time__gt=inicio_minuto,
+                tipo_actividad__in=['LLAMADA', 'DISPO', 'CAPAC', 'ADMIN']
+            ).values('agente_id').distinct().count()
+
+            # Calcular adherencia
+            adherencia = (agentes_activos / agentes_prog) * 100
+            adherencias_minuto.append(adherencia)
+
+            # Agregar al histograma
+            if adherencia <= 20:
+                distribucion['histograma']['0-20%'] += 1
+            elif adherencia <= 40:
+                distribucion['histograma']['20-40%'] += 1
+            elif adherencia <= 60:
+                distribucion['histograma']['40-60%'] += 1
+            elif adherencia <= 80:
+                distribucion['histograma']['60-80%'] += 1
+            else:
+                distribucion['histograma']['80-100%'] += 1
+
+            # Si es baja, agregar a minutos bajos
+            if adherencia < 60:
+                distribucion['minutos_bajos'].append({
+                    'minuto': minuto,
+                    'adherencia': round(adherencia, 1),
+                    'agentes_programados': agentes_prog,
+                    'agentes_activos': agentes_activos
+                })
+
+        # Calcular promedios
+        if adherencias_minuto:
+            distribucion['adherencia_promedio'] = round(sum(adherencias_minuto) / len(adherencias_minuto), 2)
+
+            # Consistencia: % de minutos con adherencia >= 80%
+            minutos_consistentes = sum(1 for a in adherencias_minuto if a >= 80)
+            distribucion['consistencia'] = round((minutos_consistentes / len(adherencias_minuto)) * 100, 1)
+
+        # Ordenar minutos bajos por peor adherencia
+        distribucion['minutos_bajos'].sort(key=lambda x: x['adherencia'])
+
+        return distribucion
+
     @staticmethod
     def calcular_impacto_factores(fecha_inicio, fecha_fin):
         """

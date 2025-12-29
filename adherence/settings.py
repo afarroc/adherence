@@ -82,20 +82,19 @@ WSGI_APPLICATION = "adherence.wsgi.application"
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'adherence_db',           # Nombre de la base de datos
-        'USER': 'adherence_user',         # Usuario de MySQL
-        'PASSWORD': 'Admin+123',          # Contraseña
-        'HOST': 'localhost',              # Dirección del servidor
-        'PORT': '3306',                   # Puerto de MySQL
+        'NAME': 'adherence_db',
+        'USER': 'adherence_user',
+        'PASSWORD': 'Admin+123',
+        'HOST': '192.168.18.45',  # Cambia 'localhost' por la IP de Termux
+        'PORT': '3306',
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'utf8mb4',
         },
         'TIME_ZONE': 'America/Lima',
-        'CONN_MAX_AGE': 300,  # Mantener conexiones por 5 minutos
+        'CONN_MAX_AGE': 300,
     }
 }
-
 # Asegurar que Django use UTF-8
 DEFAULT_CHARSET = 'utf-8'
 

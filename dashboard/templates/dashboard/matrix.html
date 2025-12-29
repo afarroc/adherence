@@ -1,0 +1,94 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Matriz de Adherencia - Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-table me-2"></i>Matriz de Adherencia por Hora y Fecha
+        </h1>
+        <p class="text-muted mb-0">
+            Vista detallada de adherencia segmentada por {{ segmento|default:"Agente" }}
+        </p>
+    </div>
+</div>
+
+{% if agente %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    Agente: {{ agente.nombre }} {{ agente.apellido }} ({{ agente.codigo }})
+                    <span class="badge bg-{{ agente.tipo_contrato|lower }}">{{ agente.get_tipo_contrato_display }}</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Hora</th>
+                                {% for fecha in fechas %}
+                                <th class="text-center">{{ fecha|date:"d-m" }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fila in datos_matriz %}
+                            <tr>
+                                <td class="fw-bold">{{ fila.hora }}</td>
+                                {% for valor in fila.valores %}
+                                <td class="text-center {{ valor.clase }}">
+                                    {{ valor.adherencia }}%
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Colores: <span class="badge bg-success">≥90%</span>
+                        <span class="badge bg-warning">70-89%</span>
+                        <span class="badge bg-danger"><70%</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Seleccionar Agente</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for agente in agentes %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">{{ agente.nombre }} {{ agente.apellido }}</h6>
+                                <p class="card-text small text-muted">{{ agente.codigo }}</p>
+                                <span class="badge bg-{{ agente.tipo_contrato|lower }} mb-2">{{ agente.get_tipo_contrato_display }}</span>
+                                <br>
+                                <a href="{% url 'dashboard:matrix_view' agente.id %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-chart-area me-1"></i>Ver Matriz
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

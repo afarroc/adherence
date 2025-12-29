@@ -37,7 +37,7 @@
                             <i class="fas fa-ellipsis-v"></i>
                         </button>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'full-time' %}">Ver detalle</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dashboard:kpi_detalle' 'full-time' %}">Ver detalle</a></li>
                         </ul>
                     </div>
                 </div>
@@ -73,7 +73,7 @@
                             <i class="fas fa-ellipsis-v"></i>
                         </button>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'part-time' %}">Ver detalle</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dashboard:kpi_detalle' 'part-time' %}">Ver detalle</a></li>
                         </ul>
                     </div>
                 </div>
@@ -152,7 +152,7 @@
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-chart-line me-2"></i>Tendencia de Adherencia (Últimos 7 días)
+                    <i class="fas fa-chart-line me-2"></i>Tendencia de Adherencia (Últimos 7 días laborables)
                 </h5>
             </div>
             <div class="card-body">
@@ -316,6 +316,59 @@
         </div>
     </div>
 </div>
+
+<!-- Herramientas y Utilidades -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tools me-2"></i>Herramientas y Utilidades
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-sync-alt fa-2x text-primary mb-3"></i>
+                                <h6 class="card-title">Regenerar Datos</h6>
+                                <p class="card-text small text-muted">Elimina todos los datos y crea nuevos datos simulados</p>
+                                <a href="{% url 'dashboard:regenerate_data' %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-play me-1"></i>Regenerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-terminal fa-2x text-success mb-3"></i>
+                                <h6 class="card-title">Comando Management</h6>
+                                <p class="card-text small text-muted">Comando para regenerar datos desde terminal</p>
+                                <code class="d-block bg-light p-2 rounded small">python manage.py regenerate_data</code>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-code fa-2x text-info mb-3"></i>
+                                <h6 class="card-title">APIs Disponibles</h6>
+                                <p class="card-text small text-muted">Endpoints para integración</p>
+                                <div class="small">
+                                    <div>/api/adherencia-diaria/</div>
+                                    <div>/api/simular-datos/</div>
+                                    <div>/api/agentes-top/</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -323,7 +376,7 @@
 $(document).ready(function() {
     // Cargar datos del gráfico de tendencia
     $.ajax({
-        url: '{% url "api_adherencia_diaria" %}',
+        url: '{% url "dashboard:api_adherencia_diaria" %}',
         data: { dias: 7 },
         success: function(response) {
             renderTrendChart(response.datos);
@@ -424,7 +477,7 @@ function renderTrendChart(datos) {
 
 function loadTopAgentes(tipo) {
     $.ajax({
-        url: '{% url "api_agentes_top" %}',
+        url: '{% url "dashboard:api_agentes_top" %}',
         data: { tipo: tipo, top: 5 },
         success: function(response) {
             var tbody = $('#topAgentesBody');

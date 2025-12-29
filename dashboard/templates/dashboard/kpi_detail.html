@@ -1,0 +1,89 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Detalle KPI - {{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-chart-bar me-2"></i>{{ titulo }}
+        </h1>
+        <p class="text-muted mb-0">
+            Período: {{ fecha_inicio|date:"d/m/Y" }} - {{ fecha_fin|date:"d/m/Y" }}
+        </p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                {% if data %}
+                    {% if tipo == 'hora' %}
+                        <!-- Tabla para adherencia por hora -->
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Hora</th>
+                                        <th>Adherencia</th>
+                                        <th>Agentes Programados</th>
+                                        <th>Agentes Activos</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in data %}
+                                    <tr>
+                                        <td>{{ item.hora }}</td>
+                                        <td>
+                                            <span class="fw-bold {% if item.adherencia >= 90 %}text-success{% elif item.adherencia >= 80 %}text-warning{% else %}text-danger{% endif %}">
+                                                {{ item.adherencia }}%
+                                            </span>
+                                        </td>
+                                        <td>{{ item.agentes_programados }}</td>
+                                        <td>{{ item.agentes_activos }}</td>
+                                        <td>
+                                            <span class="badge {% if 'Excelente' in item.estado %}bg-success{% elif 'Aceptable' in item.estado %}bg-warning{% elif 'Crítico' in item.estado %}bg-danger{% else %}bg-secondary{% endif %}">
+                                                {{ item.estado }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <!-- Información para FT/PT -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h4>Adherencia Promedio</h4>
+                                <h2 class="text-primary">{{ data.adherencia_promedio }}%</h2>
+                            </div>
+                            <div class="col-md-6">
+                                <h4>Adherencia Mediana</h4>
+                                <h2 class="text-info">{{ data.adherencia_mediana }}%</h2>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h4>Cantidad de Agentes</h4>
+                                <h2 class="text-success">{{ data.cantidad_agentes }}</h2>
+                            </div>
+                            <div class="col-md-6">
+                                <h4>Rango</h4>
+                                <h2 class="text-warning">{{ data.rango }}</h2>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No hay datos disponibles para este KPI en el período seleccionado.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

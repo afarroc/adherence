@@ -1,11 +1,12 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from datetime import date, timedelta
 import json
 
-from .models import Agente, ProgramaDiario, KPIMeta
+from .models import Agente, ProgramaDiario, RegistroActividad, KPIMeta
 from .utils import CalculadorAdherencia, SimuladorDatos
 
 
@@ -31,19 +32,16 @@ def dashboard_principal(request):
         if reporte.get('full_time') and reporte['full_time'].get('adherencia_promedio', 0) > 100:
             reporte['full_time']['adherencia_promedio'] = min(reporte['full_time']['adherencia_promedio'], 100)
     
-    # Adherencia por hora de hoy - CON VERIFICACIÓN
+    # Usar la versión CORRECTA
     try:
-        adherencia_hora = CalculadorAdherencia.calcular_adherencia_por_hora(fecha_fin)
-        
-        # Verificar que no haya adherencias imposibles
-        for hora in adherencia_hora:
-            if hora['adherencia'] > 100:
-                print(f"⚠️  Adherencia imposible detectada: {hora['hora']} - {hora['adherencia']}%")
-                # Corregir automáticamente
-                hora['adherencia'] = 100
+        adherencia_hora = CalculadorAdherencia.calcular_adherencia_por_hora_minuto_a_minuto(fecha_fin)
+
+        # Análisis de problemas
+        problemas = CalculadorAdherencia.analizar_problemas_adherencia_por_minuto(fecha_fin)
     except Exception as e:
-        print(f"❌ Error calculando adherencia por hora: {e}")
+        print(f"Error calculando adherencia por hora: {e}")
         adherencia_hora = []
+        problemas = {'horas_criticas': [], 'resumen_por_hora': {}}
     
     # Factores de impacto
     factores = CalculadorAdherencia.calcular_impacto_factores(fecha_inicio, fecha_fin)
@@ -79,7 +77,7 @@ def kpi_detalle(request, tipo):
         data = CalculadorAdherencia.calcular_adherencia_tipo_contrato('PT', fecha_inicio, fecha_fin)
         titulo = "Adherencia Part-Time"
     elif tipo == 'hora':
-        data = CalculadorAdherencia.calcular_adherencia_por_hora(date.today())
+        data = CalculadorAdherencia.calcular_adherencia_por_hora_minuto_a_minuto(date.today())
         titulo = "Adherencia por Hora"
     else:
         data = None
@@ -97,30 +95,34 @@ def kpi_detalle(request, tipo):
 
 @login_required
 def api_adherencia_diaria(request):
-    """API para gráfico de adherencia diaria"""
+    """API para gráfico de adherencia diaria - SOLO DÍAS LABORABLES"""
     dias = int(request.GET.get('dias', 7))
     fecha_fin = date.today()
-    fecha_inicio = fecha_fin - timedelta(days=dias)
-    
+
     datos = []
-    for i in range(dias):
-        fecha = fecha_fin - timedelta(days=i)
-        
-        # Calcular para FT
-        ft_data = CalculadorAdherencia.calcular_adherencia_tipo_contrato('FT', fecha, fecha)
-        ft_adherencia = ft_data['adherencia_promedio'] if ft_data else 0
-        
-        # Calcular para PT
-        pt_data = CalculadorAdherencia.calcular_adherencia_tipo_contrato('PT', fecha, fecha)
-        pt_adherencia = pt_data['adherencia_promedio'] if pt_data else 0
-        
-        datos.append({
-            'fecha': fecha.strftime('%Y-%m-%d'),
-            'ft': ft_adherencia,
-            'pt': pt_adherencia,
-            'total': round((ft_adherencia + pt_adherencia) / 2, 2)
-        })
-    
+    fecha_actual = fecha_fin
+    dias_contados = 0
+
+    while dias_contados < dias:
+        if fecha_actual.weekday() < 5:  # Día laborable (0=lunes, 4=viernes)
+            # Calcular para FT
+            ft_data = CalculadorAdherencia.calcular_adherencia_tipo_contrato('FT', fecha_actual, fecha_actual)
+            ft_adherencia = ft_data['adherencia_promedio'] if ft_data else 0
+
+            # Calcular para PT
+            pt_data = CalculadorAdherencia.calcular_adherencia_tipo_contrato('PT', fecha_actual, fecha_actual)
+            pt_adherencia = pt_data['adherencia_promedio'] if pt_data else 0
+
+            datos.append({
+                'fecha': fecha_actual.strftime('%Y-%m-%d'),
+                'ft': ft_adherencia,
+                'pt': pt_adherencia,
+                'total': round((ft_adherencia + pt_adherencia) / 2, 2)
+            })
+            dias_contados += 1
+
+        fecha_actual -= timedelta(days=1)
+
     datos.reverse()  # Orden cronológico
     return JsonResponse({'datos': datos})
 
@@ -186,5 +188,72 @@ def api_agentes_top(request):
     # Ordenar y limitar
     resultados.sort(key=lambda x: x['adherencia'], reverse=True)
     top_resultados = resultados[:top_count]
-    
+
     return JsonResponse({'agentes': top_resultados})
+
+@login_required
+def regenerate_data(request):
+    """Vista para regenerar datos del dashboard"""
+    if request.method == 'POST':
+        success = SimuladorDatos.regenerar_datos_completos(dias=7)
+        if success:
+            messages.success(request, 'Datos regenerados correctamente')
+        else:
+            messages.error(request, 'Error al regenerar los datos')
+        return redirect('dashboard:dashboard_principal')
+
+    return render(request, 'dashboard/regenerate.html')
+
+@login_required
+def matrix_view(request, agente_id=None):
+    """Vista de matriz de adherencia por hora y fecha"""
+    agentes = Agente.objects.filter(activo=True).order_by('codigo')
+
+    if agente_id:
+        agente = get_object_or_404(Agente, id=agente_id)
+
+        # Obtener últimos 7 días laborables
+        fechas = []
+        fecha_actual = date.today()
+        dias_contados = 0
+
+        while dias_contados < 7:
+            if fecha_actual.weekday() < 5:  # Día laborable
+                fechas.append(fecha_actual)
+                dias_contados += 1
+            fecha_actual -= timedelta(days=1)
+
+        fechas.reverse()  # Orden cronológico
+
+        # Calcular matriz
+        matriz = CalculadorAdherencia.calcular_matriz_adherencia_agente(agente, fechas)
+
+        # Preparar datos para template
+        horas = [f"{h:02d}:00" for h in range(8, 20)]
+        datos_matriz = []
+
+        for hora in range(8, 20):
+            fila = {'hora': f"{hora:02d}:00", 'valores': []}
+            for fecha in fechas:
+                valor = matriz.get(fecha, {}).get(hora, 0)
+                fila['valores'].append({
+                    'fecha': fecha,
+                    'adherencia': valor,
+                    'clase': 'table-success' if valor >= 90 else 'table-warning' if valor >= 70 else 'table-danger'
+                })
+            datos_matriz.append(fila)
+
+        context = {
+            'agente': agente,
+            'fechas': fechas,
+            'datos_matriz': datos_matriz,
+            'agentes': agentes,
+            'segmento': 'Agente'
+        }
+    else:
+        context = {
+            'agentes': agentes,
+            'segmento': None
+        }
+
+    return render(request, 'dashboard/matrix.html', context)

@@ -27,6 +27,7 @@
         body {
             background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-top: 56px;
         }
         
         .navbar-brand {
@@ -105,7 +106,7 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'dashboard_principal' %}">
+            <a class="navbar-brand" href="{% url 'dashboard:dashboard_principal' %}">
                 <i class="fas fa-chart-line me-2"></i>Dashboard Adherencia
             </a>
             
@@ -116,7 +117,7 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" href="{% url 'dashboard_principal' %}">
+                        <a class="nav-link active" href="{% url 'dashboard:dashboard_principal' %}">
                             <i class="fas fa-home me-1"></i>Inicio
                         </a>
                     </li>
@@ -125,9 +126,9 @@
                             <i class="fas fa-chart-bar me-1"></i>KPIs
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'full-time' %}">Adherencia Full-Time</a></li>
-                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'part-time' %}">Adherencia Part-Time</a></li>
-                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'hora' %}">Adherencia por Hora</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dashboard:kpi_detalle' 'full-time' %}">Adherencia Full-Time</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dashboard:kpi_detalle' 'part-time' %}">Adherencia Part-Time</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dashboard:kpi_detalle' 'hora' %}">Adherencia por Hora</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
@@ -147,10 +148,75 @@
         </div>
     </nav>
     
-    <!-- Contenido principal -->
-    <main class="container-fluid py-4">
-        {% block content %}{% endblock %}
-    </main>
+    <!-- Layout principal -->
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-2 d-none d-md-block bg-light sidebar">
+                <div class="sidebar-sticky">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{% url 'dashboard:dashboard_principal' %}">
+                                <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>KPIs</span>
+                            </h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dashboard:kpi_detalle' 'full-time' %}">
+                                <i class="fas fa-user-clock me-2"></i>Full-Time
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dashboard:kpi_detalle' 'part-time' %}">
+                                <i class="fas fa-user-clock me-2"></i>Part-Time
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dashboard:kpi_detalle' 'hora' %}">
+                                <i class="fas fa-clock me-2"></i>Por Hora
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Análisis</span>
+                            </h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dashboard:matrix' %}">
+                                <i class="fas fa-table me-2"></i>Matrices
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Herramientas</span>
+                            </h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'dashboard:regenerate_data' %}">
+                                <i class="fas fa-sync-alt me-2"></i>Regenerar Datos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" id="simulateDataBtn">
+                                <i class="fas fa-database me-2"></i>Simular Datos
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Contenido principal -->
+            <main class="col-md-10 ms-sm-auto px-md-4">
+                <div class="pt-3">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+        </div>
+    </div>
     
     <!-- Footer -->
     <footer class="footer mt-auto py-3 bg-light border-top">
@@ -183,7 +249,7 @@
             
             if (confirm('¿Generar datos de prueba? Esto creará agentes, programación y actividades simuladas.')) {
                 $.ajax({
-                    url: '{% url "api_simular_datos" %}',
+                    url: '{% url "dashboard:api_simular_datos" %}',
                     type: 'GET',
                     success: function(response) {
                         if (response.success) {

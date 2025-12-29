@@ -1,0 +1,35 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Regenerar Datos - Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-sync-alt me-2"></i>Regenerar Datos del Dashboard
+        </h1>
+        <p class="text-muted mb-0">
+            Esta acción eliminará todos los datos existentes y creará nuevos datos simulados.
+        </p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Regeneración Completa</h5>
+            </div>
+            <div class="card-body">
+                <p>Se eliminarán todos los agentes, programas y actividades existentes, y se crearán nuevos datos simulados para los últimos 7 días.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Regenerar Datos
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
