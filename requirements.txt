@@ -1,0 +1,7 @@
+Django==6.0
+pandas==2.3.3
+plotly==6.5.0
+django-plotly-dash==2.5.0
+django-bootstrap5==25.3
+python-dateutil==2.9.0
+numpy==2.4.0

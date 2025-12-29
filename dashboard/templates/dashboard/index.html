@@ -1,0 +1,469 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Dashboard Principal - Adherencia{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-tachometer-alt me-2"></i>Dashboard de Adherencia
+        </h1>
+        <p class="text-muted mb-0">
+            Monitoreo en tiempo real de adherencia Full-Time y Part-Time
+            <span class="badge bg-info ms-2">Período: {{ fecha_inicio|date:"d/m/Y" }} - {{ fecha_fin|date:"d/m/Y" }}</span>
+        </p>
+    </div>
+</div>
+
+<!-- KPIs Principales -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card kpi-card kpi-ft h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-subtitle text-muted mb-2">
+                            <i class="fas fa-user-clock me-1"></i>Adherencia FT
+                        </h6>
+                        <h2 class="kpi-value text-success mb-0">
+                            {{ reporte.full_time.adherencia_promedio|default:"0.00" }}%
+                        </h2>
+                        <p class="card-text mb-1">
+                            {{ reporte.full_time.cantidad_agentes|default:"0" }} agentes
+                        </p>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'full-time' %}">Ver detalle</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <span class="badge-adherence 
+                        {% if reporte.full_time.adherencia_promedio >= 95 %}adherence-high
+                        {% elif reporte.full_time.adherencia_promedio >= 85 %}adherence-medium
+                        {% else %}adherence-low{% endif %}">
+                        {{ reporte.full_time.rango|default:"N/A" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card kpi-card kpi-pt h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-subtitle text-muted mb-2">
+                            <i class="fas fa-user-clock me-1"></i>Adherencia PT
+                        </h6>
+                        <h2 class="kpi-value text-warning mb-0">
+                            {{ reporte.part_time.adherencia_promedio|default:"0.00" }}%
+                        </h2>
+                        <p class="card-text mb-1">
+                            {{ reporte.part_time.cantidad_agentes|default:"0" }} agentes
+                        </p>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'kpi_detalle' 'part-time' %}">Ver detalle</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <span class="badge-adherence 
+                        {% if reporte.part_time.adherencia_promedio >= 95 %}adherence-high
+                        {% elif reporte.part_time.adherencia_promedio >= 85 %}adherence-medium
+                        {% else %}adherence-low{% endif %}">
+                        {{ reporte.part_time.rango|default:"N/A" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card kpi-card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-2">
+                    <i class="fas fa-balance-scale me-1"></i>Diferencia FT/PT
+                </h6>
+                <h2 class="kpi-value 
+                    {% if reporte.diferencia_contratos > 0 %}text-success
+                    {% elif reporte.diferencia_contratos < 0 %}text-danger
+                    {% else %}text-secondary{% endif %} mb-0">
+                    {{ reporte.diferencia_contratos }}%
+                </h2>
+                <p class="card-text">
+                    {% if reporte.diferencia_contratos > 0 %}
+                        <i class="fas fa-arrow-up text-success me-1"></i>FT supera a PT
+                    {% elif reporte.diferencia_contratos < 0 %}
+                        <i class="fas fa-arrow-down text-danger me-1"></i>PT supera a FT
+                    {% else %}
+                        <i class="fas fa-equals text-secondary me-1"></i>Igual desempeño
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card kpi-card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-2">
+                    <i class="fas fa-bullseye me-1"></i>Meta KPI
+                </h6>
+                <h2 class="kpi-value text-primary mb-0">
+                    {{ kpi_meta.valor_meta|default:"95" }}%
+                </h2>
+                <p class="card-text">
+                    {% if kpi_meta %}
+                        Mínimo: {{ kpi_meta.valor_minimo }}%
+                    {% else %}
+                        Meta no configurada
+                    {% endif %}
+                </p>
+                <div class="progress" style="height: 6px;">
+                    {% with avg_adherence=reporte.full_time.adherencia_promedio|default:0 %}
+                    <div class="progress-bar bg-primary" role="progressbar" 
+                         style="width: {{ avg_adherence }}%;" 
+                         aria-valuenow="{{ avg_adherence }}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100">
+                    </div>
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos y Tablas -->
+<div class="row">
+    <!-- Gráfico de tendencia -->
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Tendencia de Adherencia (Últimos 7 días)
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="adherenceTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Agentes -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-trophy me-2"></i>Top 5 Agentes
+                </h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-primary active" data-type="ft">FT</button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" data-type="pt">PT</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="topAgentesTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Agente</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Adherencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topAgentesBody">
+                            <!-- Se cargará vía AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Adherencia por Hora -->
+    <!-- dashboard/index.html - CORREGIDO -->
+    
+    <!-- Adherencia por Hora -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-clock me-2"></i>Adherencia por Hora (Hoy)
+                    {% for hora in adherencia_hora %}
+                        {% if hora.adherencia > 100 %}
+                            <span class="badge bg-danger ms-2">⚠️ Datos corruptos</span>
+                        {% endif %}
+                    {% endfor %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Adherencia</th>
+                                <th>Agentes Prog.</th>
+                                <th>Agentes Activos</th>
+                                <th class="text-end">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hora in adherencia_hora %}
+                            <tr>
+                                <td><strong>{{ hora.hora }}</strong></td>
+                                <td>
+                                    {% if hora.adherencia > 100 %}
+                                        <span class="fw-bold text-danger" title="Valor imposible - Error en datos">
+                                            ⚠️ {{ hora.adherencia }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="fw-bold {% if hora.adherencia >= 90 %}text-success{% elif hora.adherencia >= 70 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ hora.adherencia }}%
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ hora.agentes_programados }}</td>
+                                <td>{{ hora.agentes_activos }}</td>
+                                <td class="text-end">
+                                    {% if hora.adherencia > 100 %}
+                                        <span class="badge bg-danger">Error</span>
+                                    {% elif hora.adherencia >= 90 %}
+                                        <span class="badge bg-success">Óptimo</span>
+                                    {% elif hora.adherencia >= 70 %}
+                                        <span class="badge bg-warning">Aceptable</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Crítico</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-3">
+                                    No hay datos de programación para hoy
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if adherencia_hora %}
+                    {% for hora in adherencia_hora %}
+                        {% if hora.adherencia > 100 %}
+                            <div class="alert alert-danger mt-3">
+                                <small>
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <strong>Error detectado:</strong> La adherencia en {{ hora.hora }} es {{ hora.adherencia }}% (imposible).
+                                    Esto indica un problema en los datos. 
+                                    <a href="#" class="alert-link" onclick="regenerarDatos()">Regenerar datos</a>.
+                                </small>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <!-- Factores de Impacto -->
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Factores que Afectan la Adherencia
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for factor in factores %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ factor.factor }}</h6>
+                            <span class="badge 
+                                {% if factor.impacto_simulado > 5 %}bg-danger
+                                {% elif factor.impacto_simulado > 2 %}bg-warning
+                                {% else %}bg-info{% endif %}">
+                                Impacto: {{ factor.impacto_simulado }}%
+                            </span>
+                        </div>
+                        <p class="mb-1 small text-muted">{{ factor.descripcion }}</p>
+                        <small class="text-muted">
+                            <i class="fas fa-tag me-1"></i>{{ factor.categoria }}
+                        </small>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-3">
+                        No hay factores de impacto configurados
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Cargar datos del gráfico de tendencia
+    $.ajax({
+        url: '{% url "api_adherencia_diaria" %}',
+        data: { dias: 7 },
+        success: function(response) {
+            renderTrendChart(response.datos);
+        }
+    });
+    
+    // Cargar top agentes FT inicialmente
+    loadTopAgentes('ft');
+    
+    // Botones para cambiar entre FT y PT
+    $('.btn-group button').click(function() {
+        $('.btn-group button').removeClass('active');
+        $(this).addClass('active');
+        var tipo = $(this).data('type');
+        loadTopAgentes(tipo);
+    });
+});
+
+function renderTrendChart(datos) {
+    var ctx = document.getElementById('adherenceTrendChart').getContext('2d');
+    var fechas = datos.map(d => d.fecha);
+    var ft = datos.map(d => d.ft);
+    var pt = datos.map(d => d.pt);
+    var total = datos.map(d => d.total);
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: fechas,
+            datasets: [
+                {
+                    label: 'Full-Time',
+                    data: ft,
+                    borderColor: '#27ae60',
+                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Part-Time',
+                    data: pt,
+                    borderColor: '#f39c12',
+                    backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Total',
+                    data: total,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 3,
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 70,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Adherencia (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Fecha'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function loadTopAgentes(tipo) {
+    $.ajax({
+        url: '{% url "api_agentes_top" %}',
+        data: { tipo: tipo, top: 5 },
+        success: function(response) {
+            var tbody = $('#topAgentesBody');
+            tbody.empty();
+            
+            if (response.agentes.length === 0) {
+                tbody.append(`
+                    <tr>
+                        <td colspan="3" class="text-center text-muted py-3">
+                            No hay agentes activos
+                        </td>
+                    </tr>
+                `);
+                return;
+            }
+            
+            $.each(response.agentes, function(index, agente) {
+                var badgeClass = agente.tipo === 'Full-Time' ? 'bg-success' : 'bg-warning';
+                var adherenceClass = agente.adherencia >= 95 ? 'text-success' : 
+                                   agente.adherencia >= 85 ? 'text-warning' : 'text-danger';
+                
+                tbody.append(`
+                    <tr>
+                        <td>
+                            <div class="fw-bold">${agente.codigo}</div>
+                            <small class="text-muted">${agente.nombre}</small>
+                        </td>
+                        <td>
+                            <span class="badge ${badgeClass}">${agente.tipo}</span>
+                        </td>
+                        <td class="text-end">
+                            <span class="fw-bold ${adherenceClass}">${agente.adherencia}%</span><br>
+                            <small class="text-muted">${agente.horas_productivas}h prod.</small>
+                        </td>
+                    </tr>
+                `);
+            });
+        }
+    });
+}
+</script>
+{% endblock %}
